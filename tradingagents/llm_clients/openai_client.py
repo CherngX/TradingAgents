@@ -147,8 +147,74 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "api_key", "callbacks", "http_client", "http_async_client", "extra_body",
 )
+
+
+def _env_bool(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return None
+    return raw.strip().lower() in ("true", "1", "yes", "on")
+
+
+def _env_csv(name: str) -> list[str]:
+    raw = os.environ.get(name, "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _env_float(name: str) -> float | None:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return None
+    return float(raw)
+
+
+def _openrouter_extra_body_from_env() -> dict[str, Any]:
+    """Build OpenRouter-specific request body controls from env vars.
+
+    OpenRouter's provider routing and sticky-session controls live in the
+    request body, not in the base OpenAI-compatible fields. Keeping this
+    env-driven avoids hard-coding endpoint choices while allowing cost-control
+    settings in `.env`.
+    """
+    extra_body: dict[str, Any] = {}
+    provider_body: dict[str, Any] = {}
+
+    order = _env_csv("TRADINGAGENTS_OPENROUTER_PROVIDER_ORDER")
+    if order:
+        provider_body["order"] = order
+
+    allow_fallbacks = _env_bool("TRADINGAGENTS_OPENROUTER_ALLOW_FALLBACKS")
+    if allow_fallbacks is not None:
+        provider_body["allow_fallbacks"] = allow_fallbacks
+
+    require_parameters = _env_bool("TRADINGAGENTS_OPENROUTER_REQUIRE_PARAMETERS")
+    if require_parameters is not None:
+        provider_body["require_parameters"] = require_parameters
+
+    data_collection = os.environ.get("TRADINGAGENTS_OPENROUTER_DATA_COLLECTION")
+    if data_collection:
+        provider_body["data_collection"] = data_collection.strip()
+
+    max_prompt_price = _env_float("TRADINGAGENTS_OPENROUTER_MAX_PROMPT_PRICE")
+    max_completion_price = _env_float("TRADINGAGENTS_OPENROUTER_MAX_COMPLETION_PRICE")
+    if max_prompt_price is not None or max_completion_price is not None:
+        max_price = {}
+        if max_prompt_price is not None:
+            max_price["prompt"] = max_prompt_price
+        if max_completion_price is not None:
+            max_price["completion"] = max_completion_price
+        provider_body["max_price"] = max_price
+
+    if provider_body:
+        extra_body["provider"] = provider_body
+
+    session_id = os.environ.get("TRADINGAGENTS_OPENROUTER_SESSION_ID")
+    if session_id:
+        extra_body["session_id"] = session_id.strip()[:256]
+
+    return extra_body
 
 @dataclass(frozen=True)
 class ProviderSpec:
@@ -293,6 +359,19 @@ class OpenAIClient(BaseLLMClient):
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
+
+        if self.provider == "openrouter":
+            openrouter_extra = _openrouter_extra_body_from_env()
+            if openrouter_extra:
+                extra_body = dict(llm_kwargs.get("extra_body") or {})
+                provider_body = {
+                    **(extra_body.get("provider") or {}),
+                    **(openrouter_extra.pop("provider", {}) or {}),
+                }
+                extra_body.update(openrouter_extra)
+                if provider_body:
+                    extra_body["provider"] = provider_body
+                llm_kwargs["extra_body"] = extra_body
 
         # The subclass (provider quirks) comes from the registry spec.
         return chat_cls(**llm_kwargs)

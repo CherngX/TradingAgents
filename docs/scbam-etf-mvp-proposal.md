@@ -61,6 +61,12 @@ Preferred provider order:
 Baidu Qianfan, Wafer
 ```
 
+For this model, OpenRouter currently exposes these endpoint slugs:
+
+```text
+baidu/fp8, wafer/fp4
+```
+
 The local POC environment should configure this through `.env` and environment variables rather than hard-coding model settings. The API key must not be committed to git, pasted into reports, or included in committee materials. This repository's `.gitignore` excludes `.env`.
 
 Local `.env` configuration:
@@ -72,11 +78,20 @@ TRADINGAGENTS_QUICK_THINK_LLM=deepseek/deepseek-v4-flash
 OPENROUTER_API_KEY=...
 TRADINGAGENTS_MAX_DEBATE_ROUNDS=1
 TRADINGAGENTS_MAX_RISK_ROUNDS=1
+TRADINGAGENTS_OPENROUTER_PROVIDER_ORDER=baidu/fp8,wafer/fp4
+TRADINGAGENTS_OPENROUTER_ALLOW_FALLBACKS=false
+TRADINGAGENTS_OPENROUTER_REQUIRE_PARAMETERS=true
+TRADINGAGENTS_OPENROUTER_DATA_COLLECTION=deny
+TRADINGAGENTS_OPENROUTER_MAX_PROMPT_PRICE=0.10
+TRADINGAGENTS_OPENROUTER_MAX_COMPLETION_PRICE=0.20
+TRADINGAGENTS_OPENROUTER_SESSION_ID=scbam-etf-mvp
 ```
 
-For early testing, use conservative debate depth and a small ETF universe to control cost and latency.
+For early testing, use conservative debate depth and a small ETF universe to control cost and latency. Disabling OpenRouter fallbacks is intentional for the POC: if Baidu and Wafer are unavailable or exceed the price cap, the run should fail rather than silently route to a more expensive provider.
 
 Initial live API testing should start with one ETF, then expand to the five-ETF POC universe after cost, latency, and output quality are acceptable.
+
+OpenRouter prompt caching for DeepSeek is automatic, but cache hit rates depend on stable prompts and stable routing. The `TRADINGAGENTS_OPENROUTER_SESSION_ID` setting should be kept fixed during a POC run to improve sticky routing behavior.
 
 ## Data Sources
 
