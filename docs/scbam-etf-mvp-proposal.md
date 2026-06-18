@@ -91,7 +91,7 @@ For early testing, use conservative debate depth and a small ETF universe to con
 
 Initial live API testing should start with one ETF, then expand to the five-ETF POC universe after cost, latency, and output quality are acceptable.
 
-OpenRouter prompt caching for DeepSeek is automatic, but cache hit rates depend on stable prompts and stable routing. The `TRADINGAGENTS_OPENROUTER_SESSION_ID` setting should be kept fixed during a POC run to improve sticky routing behavior.
+OpenRouter prompt caching depends on the selected endpoint. The current Baidu/Wafer POC routing is chosen for predictable low cost and provider control, not for guaranteed cache hits. If cache behavior becomes a higher priority than strict low-cost routing, add a cache-supporting endpoint such as `deepseek` to the provider order and re-check the price cap before running production-sized prompts. The `TRADINGAGENTS_OPENROUTER_SESSION_ID` setting should still be kept fixed during a POC run to improve sticky routing behavior where supported.
 
 ## Data Sources
 
